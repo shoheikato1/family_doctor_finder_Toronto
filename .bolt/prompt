@@ -1,0 +1,64 @@
+You are helping me build a prototype called **Let's find you a family doctor in Ontario**. It is a calm, desktop only web app that helps Ontario adults find a family doctor by configuring an outbound voice agent and tracking the agent's results.
+
+## Critical constraints (repeat them back to me before any code change)
+
+* This is a **CLIENT ONLY** prototype. No backend. No server. No database. No external API calls. No Supabase. No real authentication.
+* All data is mocked. All persistence is browser localStorage.
+* This is a **DESKTOP WEB ONLY** prototype. Optimized for 1280px and wider. Minimum supported width 1024px. No mobile responsive behavior. No tablet adaptations.
+* Tech stack is locked: React 18 + Vite + Tailwind CSS + React Router + Zustand or React Context for state. Do not introduce additional dependencies without asking.
+
+If you are about to add a server, database, auth provider, or external API, stop and ask me first. The default answer is no.
+
+## Reference files (read before generating)
+
+* `PRD.md`: the source of truth for what to build. All 7 functional requirements, the data model, the application shell, the routes, the mock data seed.
+* `components.md`: the component library spec. The contract between the design system project and the screens project. Read this before generating any view code.
+
+## Locked design tokens
+
+These are non negotiable. Use them exactly. Never substitute approximate colors.
+
+| Role | Token | Hex |
+|---|---|---|
+| Background base | `background-base` | `#F7F2E7` |
+| Surface (cards) | `surface` | `#FFFCF5` |
+| Primary action | `primary` | `#8FB89E` |
+| Primary action hover | `primary-hover` | `#7BA386` |
+| Secondary action | `secondary` | `#7A9CB8` |
+| Text primary | `text-primary` | `#2D4A6B` |
+| Text secondary | `text-secondary` | `#6B7A8A` |
+| Text tertiary | `text-tertiary` | `#A4BCCF` |
+| Border | `border-soft` | `#E5DFD2` |
+| Brand accent | `brand-accent` | `#E89A8E` |
+| Status accepted | `status-accepted` | `#7BA386` |
+| Status rejected | `status-rejected` | `#D8A09C` |
+| Status pending | `status-pending` | `#C4B89A` |
+| Status calling | `status-calling` | `#7A9CB8` |
+
+**Token implementation rule.** All colors must be referenced through Tailwind theme tokens (`bg-primary`, `text-text-primary`, `border-border-soft`), never raw hex codes (`bg-[#8FB89E]`, `style={{color: '#2D4A6B'}}`). The single source of truth is `tailwind.config.js`. When the brand iterates and the palette shifts, the only file that should change is `tailwind.config.js`. If a new color is needed, add it to the config first, then use it.
+
+This rule also applies to:
+* Border radius (use `rounded-md`, not `rounded-[8px]`)
+* Transition durations (use `duration-120`, not `duration-[120ms]`)
+* Z index values (use `z-modal-overlay`, not `z-[100]`)
+
+* Fonts: Inter for headings and body, JetBrains Mono for OHIP and postal code. 16px body base, 1.6 line height.
+* Spacing: 4px grid. Multiples of 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64.
+* Card padding: 24px. Section gap: 32px.
+
+## UX writing voice
+
+* Calm. Direct. Plain language. Never alarming.
+* No exclamation marks unless something is genuinely worth celebrating (e.g., the agent run completed and found 4 accepting clinics).
+* No corporate or marketing voice. No "Empower yourself to find your perfect family doctor!" Just "Let's find you a family doctor."
+* Error messages are kind, not scolding. "Postal code looks off, try the format M4K 1A1" is right. "Invalid input!" is wrong.
+* Loading states say what is happening, not "Please wait." Example: "Calling clinics. About 6 seconds."
+
+## What to never do in this project
+
+* Never spin up Supabase or any backend.
+* Never add user analytics, telemetry, or error tracking SDKs.
+* Never add toast firing rules I did not specify. Use toasts at your discretion for save confirmations and "coming soon" stubs.
+* Never use bright reds, alarm colors, or saturated palettes. Even error states stay muted.
+* Never break the locked palette. If a new state needs a color, ask me.
+* Never invent a new component if `components.md` already covers the use case. If it doesn't, add the new component to `src/components/design-system/`, update `components.md` in the same edit, and only then use it.
