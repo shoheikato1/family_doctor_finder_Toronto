@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/design-system/PageHeader';
 import { Card } from '../components/design-system/Card';
 import { Button } from '../components/design-system/Button';
@@ -22,10 +23,12 @@ const DEFAULT_SETTINGS: Omit<AgentSettings, 'userId'> = {
 type LocalSettings = Omit<AgentSettings, 'userId'>;
 
 export function AgentConfigPage() {
+  const navigate = useNavigate();
   const { addToast } = useToast();
   const user = useAppStore((s) => s.user);
   const storedSettings = useAppStore((s) => s.agentSettings);
   const updateAgentSettings = useAppStore((s) => s.updateAgentSettings);
+  const startAgentRun = useAppStore((s) => s.startAgentRun);
 
   function settingsFromStore(): LocalSettings {
     if (!storedSettings) return { ...DEFAULT_SETTINGS };
@@ -55,12 +58,26 @@ export function AgentConfigPage() {
     setLocal((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleSave() {
+  function persistSettings() {
     updateAgentSettings({
       userId: user?.id ?? '',
       ...local,
       customDiscoveryScript: showCustomScript ? local.customDiscoveryScript : null,
     });
+  }
+
+  function handleSaveAndRun() {
+    persistSettings();
+    const started = startAgentRun();
+    if (!started) {
+      addToast('Run already in progress', 'warning');
+      return;
+    }
+    navigate('/dashboard');
+  }
+
+  function handleSaveOnly() {
+    persistSettings();
     addToast('Settings saved.', 'success');
   }
 
@@ -227,8 +244,11 @@ export function AgentConfigPage() {
 
         {/* Footer actions */}
         <div className="flex items-center gap-3 pb-8">
-          <Button variant="primary" onClick={handleSave}>
-            Save settings
+          <Button variant="primary" onClick={handleSaveAndRun}>
+            Save and run
+          </Button>
+          <Button variant="ghost" onClick={handleSaveOnly}>
+            Save without running
           </Button>
           <Button variant="ghost" onClick={handleCancel}>
             Cancel

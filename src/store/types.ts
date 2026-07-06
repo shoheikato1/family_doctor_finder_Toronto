@@ -80,18 +80,21 @@ export type ShortlistEntry = {
   bookingNotes: string;
 };
 
+export type AgentRunState = 'idle' | 'queued' | 'running' | 'complete';
+
+export type AgentRunResult = 'accepted' | 'rejected' | 'voicemail_left' | 'no_answer';
+
 export type AgentRun = {
   id: string;
   userId: string;
-  startedAt: string;
+  state: AgentRunState;
+  startedAt: string | null;
   completedAt: string | null;
-  state: 'idle' | 'running' | 'complete' | 'failed';
-  clinicsTotal: number;
-  clinicsCalled: number;
-  clinicsAccepting: number;
-  clinicsRejected: number;
-  clinicsVoicemail: number;
-  clinicsNoAnswer: number;
+  totalClinics: number;
+  callsAttempted: number;
+  callsCompleted: number;
+  currentClinicId: string | null;
+  results: Record<string, AgentRunResult> | null;
 };
 
 export type WizardStepId =

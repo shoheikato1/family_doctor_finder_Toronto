@@ -117,10 +117,6 @@ export function OnboardingPage() {
   const currentStepId = wizard.currentStepId;
   const data = wizard.data;
 
-  function fieldError(key: string) {
-    return errors[key];
-  }
-
   function setFieldError(key: string, msg: string | undefined) {
     setErrors((e) => {
       const next = { ...e };

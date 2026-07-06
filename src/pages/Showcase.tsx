@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   Search,
-  Stethoscope,
   Inbox,
 } from 'lucide-react';
 

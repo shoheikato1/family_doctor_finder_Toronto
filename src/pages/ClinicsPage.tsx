@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MapPin, Bookmark, BookmarkCheck } from 'lucide-react';
 import { PageHeader } from '../components/design-system/PageHeader';
 import { Card } from '../components/design-system/Card';
@@ -40,6 +40,7 @@ const ALL_LANGUAGES = Array.from(
 
 export function ClinicsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { addToast } = useToast();
 
   const profile = useAppStore((s) => s.profile);
@@ -56,7 +57,11 @@ export function ClinicsPage() {
     initClinicStatuses(MOCK_CLINICS.map((c) => c.id));
   }, [initClinicStatuses]);
 
-  const [statusFilter, setStatusFilter] = useState('all');
+  // Allow pre-setting the status filter via query param, e.g. /clinics?status=accepted
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const preset = searchParams.get('status');
+    return preset && STATUS_OPTIONS.some((o) => o.value === preset) ? preset : 'all';
+  });
   const [languageFilter, setLanguageFilter] = useState<string[]>([]);
   const [sortOrder, setSortOrder] = useState('distance');
 

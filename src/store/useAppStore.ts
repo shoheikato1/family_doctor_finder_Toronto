@@ -8,9 +8,40 @@ import type {
   ClinicStatusValue,
   ShortlistEntry,
   AgentRun,
+  AgentRunResult,
   WizardState,
   WizardStepId,
 } from './types';
+import { MOCK_CLINICS } from '../mock/clinics';
+import { buildTranscriptContext, generateCallResult } from '../mock/transcripts';
+
+// ── Agent run simulation helpers ────────────────────────────
+// Timers live at module level: they are never persisted, so a page refresh
+// mid-run leaves no live timer chain (handled by the rehydration guard below).
+
+let runTimers: Array<ReturnType<typeof setTimeout>> = [];
+
+function clearRunTimers() {
+  runTimers.forEach(clearTimeout);
+  runTimers = [];
+}
+
+function scheduleRunStep(fn: () => void, ms: number) {
+  runTimers.push(setTimeout(fn, ms));
+}
+
+/** Random result distribution: 40% accepted, 30% rejected, 20% voicemail, 10% no answer. */
+function rollCallResult(): AgentRunResult {
+  const r = Math.random();
+  if (r < 0.4) return 'accepted';
+  if (r < 0.7) return 'rejected';
+  if (r < 0.9) return 'voicemail_left';
+  return 'no_answer';
+}
+
+const RUN_QUEUE_MS = 500;
+const RUN_CALL_SPACING_MS = 700;
+const RUN_CALL_DURATION_MS = 600;
 
 // ── Default values ──────────────────────────────────────────
 
@@ -96,6 +127,10 @@ type AppState = {
   // Agent run
   setAgentRun: (run: AgentRun) => void;
   updateAgentRun: (partial: Partial<AgentRun>) => void;
+  startAgentRun: () => boolean;
+  tickAgentRun: (clinicId: string, callsAttempted: number) => void;
+  completeAgentRun: (results: Record<string, AgentRunResult>) => void;
+  resetAgentRun: () => void;
 
   // Wizard
   setWizardStep: (stepId: WizardStepId) => void;
@@ -131,7 +166,7 @@ export const useAppStore = create<AppState>()(
       signIn: (email: string) => {
         const stored = get().user;
         if (stored && stored.email === email) {
-          // User already exists in store — session is active
+          // User already exists in store  --  session is active
           return true;
         }
         return false;
@@ -271,6 +306,107 @@ export const useAppStore = create<AppState>()(
         set({ agentRun: { ...existing, ...partial } });
       },
 
+      startAgentRun: () => {
+        const current = get().agentRun;
+        // Concurrent runs are blocked; the caller surfaces the toast.
+        if (current && (current.state === 'queued' || current.state === 'running')) {
+          return false;
+        }
+
+        clearRunTimers();
+
+        const clinics = MOCK_CLINICS;
+        get().initClinicStatuses(clinics.map((c) => c.id));
+
+        const run: AgentRun = {
+          id: crypto.randomUUID(),
+          userId: get().user?.id ?? '',
+          state: 'queued',
+          startedAt: new Date().toISOString(),
+          completedAt: null,
+          totalClinics: clinics.length,
+          callsAttempted: 0,
+          callsCompleted: 0,
+          currentClinicId: null,
+          results: {},
+        };
+        set({ agentRun: run });
+
+        const ctx = buildTranscriptContext(
+          get().profile,
+          get().agentSettings?.voicemailScript ?? null
+        );
+        const results: Record<string, AgentRunResult> = {};
+
+        clinics.forEach((clinic, index) => {
+          const callStart = RUN_QUEUE_MS + index * RUN_CALL_SPACING_MS;
+
+          // Call begins: pulse the clinic, advance the run pointer.
+          scheduleRunStep(() => {
+            get().tickAgentRun(clinic.id, index + 1);
+            get().setClinicStatus(clinic.id, 'calling');
+          }, callStart);
+
+          // Call resolves: seed transcript + criteria, update tallies.
+          scheduleRunStep(() => {
+            const result = rollCallResult();
+            results[clinic.id] = result;
+            const seeded = generateCallResult(clinic, ctx, result);
+            get().setClinicStatus(clinic.id, result);
+            get().updateClinicStatus(clinic.id, seeded);
+            get().updateAgentRun({
+              callsCompleted: index + 1,
+              results: { ...results },
+            });
+            if (
+              result === 'accepted' &&
+              get().agentSettings?.autoShortlistOnAccept &&
+              !get().shortlist[clinic.id]
+            ) {
+              get().addToShortlist(clinic.id);
+            }
+          }, callStart + RUN_CALL_DURATION_MS);
+        });
+
+        scheduleRunStep(() => {
+          get().completeAgentRun({ ...results });
+        }, RUN_QUEUE_MS + clinics.length * RUN_CALL_SPACING_MS);
+
+        return true;
+      },
+
+      tickAgentRun: (clinicId: string, callsAttempted: number) => {
+        const existing = get().agentRun;
+        if (!existing) return;
+        set({
+          agentRun: {
+            ...existing,
+            state: 'running',
+            currentClinicId: clinicId,
+            callsAttempted,
+          },
+        });
+      },
+
+      completeAgentRun: (results: Record<string, AgentRunResult>) => {
+        const existing = get().agentRun;
+        if (!existing) return;
+        set({
+          agentRun: {
+            ...existing,
+            state: 'complete',
+            completedAt: new Date().toISOString(),
+            currentClinicId: null,
+            results,
+          },
+        });
+      },
+
+      resetAgentRun: () => {
+        clearRunTimers();
+        set({ agentRun: null });
+      },
+
       // ── Wizard ──
 
       setWizardStep: (stepId: WizardStepId) => {
@@ -298,6 +434,33 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'fdf-store',
+      merge: (persistedState, currentState) => {
+        const merged: AppState = {
+          ...currentState,
+          ...(persistedState as Partial<AppState>),
+        };
+
+        // Hardening: a persisted mid-run agentRun has no live timer chain
+        // after a refresh, so it would strand the app in a fake-live state.
+        // Reset it to idle (null) and clear any clinic stuck at 'calling'.
+        // Also drops persisted runs from the pre-Phase-4 AgentRun shape.
+        const run = merged.agentRun as (AgentRun & { totalClinics?: unknown }) | null;
+        if (
+          run &&
+          (run.state === 'queued' ||
+            run.state === 'running' ||
+            typeof run.totalClinics !== 'number')
+        ) {
+          merged.agentRun = null;
+          const statuses: Record<string, ClinicStatus> = {};
+          for (const [id, cs] of Object.entries(merged.clinicStatuses)) {
+            statuses[id] = cs.status === 'calling' ? { ...cs, status: 'not_called' } : cs;
+          }
+          merged.clinicStatuses = statuses;
+        }
+
+        return merged;
+      },
     }
   )
 );
