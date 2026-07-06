@@ -23,7 +23,7 @@ No new runtime dependencies beyond `@supabase/supabase-js` and what the Vercel t
 Tables, all RLS `user_id = auth.uid()` except `clinics` (shared read-only cache) and `feature_flags` (server-read):
 `profiles`, `agent_settings`, `clinics`, `runs`, `calls`, `shortlist`, `feature_flags` (`caller_live_mode=false`, `user_voice_clone=false`), `cost_events`.
 
-Endpoints (Vercel `/api`): `health`, `scout` (POST, auth), `run/start` (POST, auth), `run/advance` (internal, webhook-driven), `webhooks/elevenlabs` (POST, HMAC-verified), `webhooks/receptionist-init` (POST), `cron/watchdog`.
+Endpoints (Vercel `/api`): `health`, `flags` (GET, client mirror of feature flags, copy only), `scout` (POST, auth), `run/start` (POST, auth), `webhooks/elevenlabs` (POST, HMAC-verified), `webhooks/receptionist-init` (POST), `cron/watchdog` (GET, `Authorization: Bearer CRON_SECRET`). The contract's `run/advance` is implemented as the internal module `api/_lib/chain.ts` (`advanceChain`), invoked by the post-call webhook and the watchdog rather than exposed over HTTP: nothing external ever advances a chain.
 
 ## Security rules (hard)
 
