@@ -7,7 +7,7 @@ import { Tag } from '../components/design-system/Tag';
 import { EmptyState } from '../components/design-system/EmptyState';
 import { useToast } from '../components/design-system/Toast';
 import { useAppStore } from '../store/useAppStore';
-import { MOCK_CLINICS, LANGUAGE_LABELS } from '../mock/clinics';
+import { useClinicCatalog, LANGUAGE_LABELS } from '../lib/clinicCatalog';
 import type { ClinicStatusValue } from '../store/types';
 
 const STATUS_LABEL: Record<ClinicStatusValue, string> = {
@@ -59,7 +59,8 @@ export function ClinicDetailPage() {
   const removeFromShortlist = useAppStore((s) => s.removeFromShortlist);
   const initClinicStatuses = useAppStore((s) => s.initClinicStatuses);
 
-  const clinic = MOCK_CLINICS.find((c) => c.id === id);
+  const catalog = useClinicCatalog();
+  const clinic = catalog.find((c) => c.id === id);
 
   if (!clinic) {
     return (
@@ -114,7 +115,7 @@ export function ClinicDetailPage() {
 
       {/* Two-column body */}
       <div className="flex gap-6 px-8 py-6 items-start">
-        {/* Left — main content */}
+        {/* Left  --  main content */}
         <div className="flex-1 min-w-0 flex flex-col gap-5">
           {/* Clinic information */}
           <Card>
@@ -170,7 +171,7 @@ export function ClinicDetailPage() {
             </div>
           </Card>
 
-          {/* Call result — visible when call outcome is set AND transcript exists */}
+          {/* Call result  --  visible when call outcome is set AND transcript exists */}
           {hasCallResult && clinicStatus?.callTranscript && (
             <Card>
               <h2 className="font-sans text-base font-semibold text-text-primary mb-4">
@@ -263,7 +264,7 @@ export function ClinicDetailPage() {
               value={clinicStatus?.notes ?? ''}
               onChange={(e) => updateClinicStatus(clinic.id, { notes: e.target.value })}
               onBlur={(e) => updateClinicStatus(clinic.id, { notes: e.target.value })}
-              placeholder="Add notes about this clinic — follow-up reminders, referral details, anything useful."
+              placeholder="Add notes about this clinic  --  follow-up reminders, referral details, anything useful."
               className={[
                 'w-full rounded-md border border-border-soft bg-background-base px-4 py-3',
                 'font-sans text-sm text-text-primary placeholder:text-text-tertiary',

@@ -2,13 +2,26 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/design-system/PageHeader';
 import { Card } from '../components/design-system/Card';
+import { Banner } from '../components/design-system/Banner';
 import { Button } from '../components/design-system/Button';
 import { Slider } from '../components/design-system/Slider';
 import { TimePicker } from '../components/design-system/TimePicker';
 import { Toggle } from '../components/design-system/Toggle';
 import { useAppStore } from '../store/useAppStore';
 import { useToast } from '../components/design-system/Toast';
+import { isRealMode } from '../lib/backendMode';
+import { upsertAgentSettings } from '../lib/repositories/agentSettings';
+import { postApi, failureMessage, type ApiFailure } from '../lib/api';
+import { refreshRunNow } from '../lib/realBackend';
 import type { AgentSettings } from '../store/types';
+
+/** Response shape of POST /api/run/start (api/run/start.ts). */
+interface RunStartResponse {
+  run_id: string;
+  mode: 'live' | 'dry_run';
+  queued: number;
+  calls: Array<{ id: string; clinic_id: string; position: number }>;
+}
 
 const DEFAULT_SETTINGS: Omit<AgentSettings, 'userId'> = {
   voicemailScript:
@@ -47,6 +60,10 @@ export function AgentConfigPage() {
     storedSettings?.customDiscoveryScript != null
   );
 
+  // Real mode: run-start progress and honest error surfacing (moves C6, Z2).
+  const [starting, setStarting] = useState(false);
+  const [runFailure, setRunFailure] = useState<ApiFailure | null>(null);
+
   // Resync if another tab updates the store (edge case, good hygiene)
   useEffect(() => {
     setLocal(settingsFromStore());
@@ -58,15 +75,51 @@ export function AgentConfigPage() {
     setLocal((prev) => ({ ...prev, [key]: value }));
   }
 
-  function persistSettings() {
-    updateAgentSettings({
+  function persistSettings(): AgentSettings {
+    const settings: AgentSettings = {
       userId: user?.id ?? '',
       ...local,
       customDiscoveryScript: showCustomScript ? local.customDiscoveryScript : null,
-    });
+    };
+    updateAgentSettings(settings);
+    return settings;
   }
 
-  function handleSaveAndRun() {
+  /** Real mode: settings must land in Postgres before the run reads them server-side. */
+  async function persistSettingsReal(): Promise<AgentSettings | null> {
+    const settings = persistSettings();
+    try {
+      await upsertAgentSettings(settings);
+      return settings;
+    } catch (e) {
+      console.error('agent settings upsert failed', e);
+      addToast('Could not save settings to the backend. Try again.', 'warning');
+      return null;
+    }
+  }
+
+  async function handleSaveAndRun() {
+    if (isRealMode) {
+      if (starting) return;
+      setRunFailure(null);
+      setStarting(true);
+      const saved = await persistSettingsReal();
+      if (!saved) {
+        setStarting(false);
+        return;
+      }
+      const result = await postApi<RunStartResponse>('/api/run/start');
+      if (result.ok) {
+        await refreshRunNow().catch(() => undefined);
+        setStarting(false);
+        navigate('/dashboard');
+      } else {
+        setRunFailure(result.failure);
+        setStarting(false);
+      }
+      return;
+    }
+
     persistSettings();
     const started = startAgentRun();
     if (!started) {
@@ -76,7 +129,12 @@ export function AgentConfigPage() {
     navigate('/dashboard');
   }
 
-  function handleSaveOnly() {
+  async function handleSaveOnly() {
+    if (isRealMode) {
+      const saved = await persistSettingsReal();
+      if (saved) addToast('Settings saved.', 'success');
+      return;
+    }
     persistSettings();
     addToast('Settings saved.', 'success');
   }
@@ -105,6 +163,19 @@ export function AgentConfigPage() {
       />
 
       <div className="px-8 py-8 flex flex-col gap-8 max-w-2xl">
+
+        {runFailure && (
+          <Banner
+            variant="warning"
+            title={
+              runFailure.kind === 'not_configured'
+                ? failureMessage(runFailure)
+                : 'Could not start the run'
+            }
+            description={runFailure.kind === 'not_configured' ? undefined : failureMessage(runFailure)}
+            dismissible
+          />
+        )}
 
         {/* Search radius */}
         <Card>
@@ -244,10 +315,10 @@ export function AgentConfigPage() {
 
         {/* Footer actions */}
         <div className="flex items-center gap-3 pb-8">
-          <Button variant="primary" onClick={handleSaveAndRun}>
+          <Button variant="primary" loading={starting} onClick={() => void handleSaveAndRun()}>
             Save and run
           </Button>
-          <Button variant="ghost" onClick={handleSaveOnly}>
+          <Button variant="ghost" onClick={() => void handleSaveOnly()}>
             Save without running
           </Button>
           <Button variant="ghost" onClick={handleCancel}>

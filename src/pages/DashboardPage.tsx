@@ -9,7 +9,7 @@ import { EmptyState } from '../components/design-system/EmptyState';
 import { StatusPill } from '../components/design-system/StatusPill';
 import { useToast } from '../components/design-system/Toast';
 import { useAppStore } from '../store/useAppStore';
-import { MOCK_CLINICS } from '../mock/clinics';
+import { useClinicCatalog } from '../lib/clinicCatalog';
 import type { AgentRunResult } from '../store/types';
 
 const RUN_COUNT_LABELS: Array<{ key: AgentRunResult; label: string; dotClass: string }> = [
@@ -19,13 +19,23 @@ const RUN_COUNT_LABELS: Array<{ key: AgentRunResult; label: string; dotClass: st
   { key: 'no_answer', label: 'no answer', dotClass: 'bg-status-no-answer' },
 ];
 
+/** Copy for a failed run row; not_configured is the placeholder surface (C6). */
+function runErrorTitle(runError: string): string {
+  if (runError.startsWith('not_configured:')) {
+    return `Backend not fully configured yet: missing ${runError.slice('not_configured:'.length)}`;
+  }
+  return `Your last run failed (${runError.replace(/_/g, ' ')}). Try again.`;
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const user = useAppStore((s) => s.user);
   const profile = useAppStore((s) => s.profile);
   const agentRun = useAppStore((s) => s.agentRun);
+  const runError = useAppStore((s) => s.runError);
   const clinicStatuses = useAppStore((s) => s.clinicStatuses);
   const resetAgentRun = useAppStore((s) => s.resetAgentRun);
+  const clinics = useClinicCatalog();
 
   const { addToast } = useToast();
 
@@ -49,7 +59,7 @@ export function DashboardPage() {
   }
 
   const currentClinicName = agentRun?.currentClinicId
-    ? MOCK_CLINICS.find((c) => c.id === agentRun.currentClinicId)?.name ?? null
+    ? clinics.find((c) => c.id === agentRun.currentClinicId)?.name ?? null
     : null;
 
   const runTotal = agentRun?.totalClinics ?? 0;
@@ -57,7 +67,7 @@ export function DashboardPage() {
     runTotal > 0 ? Math.round(((agentRun?.callsCompleted ?? 0) / runTotal) * 100) : 0;
 
   // Quick stats
-  const totalClinics = MOCK_CLINICS.length;
+  const totalClinics = clinics.length;
   const allStatuses = Object.values(clinicStatuses);
   const calledCount = allStatuses.filter((s) => s.status !== 'not_called').length;
   const acceptedCount = allStatuses.filter((s) => s.status === 'accepted').length;
@@ -83,6 +93,12 @@ export function DashboardPage() {
             title="Agent is calling clinics"
             description="This usually takes a few minutes."
           />
+        </div>
+      )}
+
+      {runError && (
+        <div className="px-8 pt-6">
+          <Banner variant="warning" title={runErrorTitle(runError)} dismissible />
         </div>
       )}
 
@@ -276,7 +292,7 @@ export function DashboardPage() {
             ) : (
               <ul className="flex flex-col divide-y divide-border-soft">
                 {recentEvents.map((event, i) => {
-                  const clinic = MOCK_CLINICS.find((c) => c.id === event.clinicId);
+                  const clinic = clinics.find((c) => c.id === event.clinicId);
                   return (
                     <li key={i} className="flex items-center justify-between py-3">
                       <span className="font-sans text-sm text-text-primary">

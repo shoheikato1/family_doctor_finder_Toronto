@@ -1,6 +1,7 @@
 import { Home, List, Bookmark, Settings, Heart } from 'lucide-react';
 import { UserCard } from './UserCard';
 import { Button } from './Button';
+import { Tag } from './Tag';
 
 type NavItem = {
   route: string;
@@ -20,6 +21,7 @@ type SidebarNavProps = {
   user: { firstName: string; email: string };
   onNavigate: (route: string) => void;
   onSignOut: () => void;
+  backendBadge?: string; // small footer Tag, e.g. "Demo mode" / "Live backend"
 };
 
 export function SidebarNav({
@@ -27,6 +29,7 @@ export function SidebarNav({
   user,
   onNavigate,
   onSignOut,
+  backendBadge,
 }: SidebarNavProps) {
   return (
     <nav
@@ -92,6 +95,11 @@ export function SidebarNav({
             Sign out
           </Button>
         </div>
+        {backendBadge && (
+          <div className="px-6 pt-3">
+            <Tag size="sm">{backendBadge}</Tag>
+          </div>
+        )}
       </div>
     </nav>
   );

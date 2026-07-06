@@ -43,7 +43,9 @@ export type Clinic = {
   lastVerifiedAt: string | null;
   walkInOk: boolean;
   telehealthOk: boolean;
-  distanceKm: number;
+  // Real-mode clinics restored from Postgres have no distance (the scout
+  // response is the only distance source); null hides the distance line.
+  distanceKm: number | null;
 };
 
 export type ClinicStatusValue =

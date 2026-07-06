@@ -7,9 +7,13 @@ import { Select } from '../components/design-system/Select';
 import { MultiSelect } from '../components/design-system/MultiSelect';
 import { Button } from '../components/design-system/Button';
 import { Card } from '../components/design-system/Card';
-import { useAppStore } from '../store/useAppStore';
+import { useToast } from '../components/design-system/Toast';
+import { useAppStore, DEFAULT_AGENT_SETTINGS } from '../store/useAppStore';
+import { isRealMode } from '../lib/backendMode';
+import { upsertProfile } from '../lib/repositories/profile';
+import { upsertAgentSettings } from '../lib/repositories/agentSettings';
 import { lookupNeighborhood } from '../mock/postalLookup';
-import type { Profile, WizardStepId } from '../store/types';
+import type { AgentSettings, Profile, WizardStepId } from '../store/types';
 
 // ── Step definitions ─────────────────────────────────────────
 
@@ -74,6 +78,7 @@ function validateDob(v: string) {
 
 export function OnboardingPage() {
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   const user = useAppStore((s) => s.user);
   const profile = useAppStore((s) => s.profile);
@@ -232,6 +237,23 @@ export function OnboardingPage() {
       additionalNotes: data.additionalNotes ?? null,
       isComplete: true,
     };
+
+    // Real mode (move P5): profile + agent_settings upsert to Postgres before
+    // the finish animation; on failure the user stays here and can retry.
+    if (isRealMode) {
+      const state = useAppStore.getState();
+      const settings: AgentSettings =
+        state.agentSettings ?? { userId: user?.id ?? '', ...DEFAULT_AGENT_SETTINGS };
+      try {
+        await upsertProfile(newProfile);
+        await upsertAgentSettings(settings);
+      } catch (e) {
+        console.error('onboarding save failed', e);
+        addToast('Could not save your profile to the backend. Try again.', 'warning');
+        return;
+      }
+      if (!state.agentSettings) state.setAgentSettings(settings);
+    }
 
     setProfile(newProfile);
     setFinishing(true);
@@ -597,7 +619,7 @@ function StepCriteria({ data, onChange }: StepCriteriaProps) {
         onChange={(v) => onChange({ criteria: v })}
       />
       <p className="font-sans text-xs text-text-tertiary">
-        None selected is fine — the agent will search broadly.
+        None selected is fine  --  the agent will search broadly.
       </p>
 
       <div className="flex flex-col gap-1.5 pt-2 border-t border-border-soft">

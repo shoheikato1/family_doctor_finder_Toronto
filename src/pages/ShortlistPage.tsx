@@ -11,7 +11,7 @@ import { Modal } from '../components/design-system/Modal';
 import { TimePicker } from '../components/design-system/TimePicker';
 import { useToast } from '../components/design-system/Toast';
 import { useAppStore } from '../store/useAppStore';
-import { MOCK_CLINICS, LANGUAGE_LABELS } from '../mock/clinics';
+import { useClinicCatalog, LANGUAGE_LABELS } from '../lib/clinicCatalog';
 import type { ClinicStatusValue } from '../store/types';
 
 function todayIso(): string {
@@ -48,7 +48,8 @@ export function ShortlistPage() {
 
   const [bookingModal, setBookingModal] = useState<BookingModalState | null>(null);
 
-  const shortlistedClinics = MOCK_CLINICS.filter((c) => Boolean(shortlist[c.id]));
+  const catalog = useClinicCatalog();
+  const shortlistedClinics = catalog.filter((c) => Boolean(shortlist[c.id]));
 
   function openBookingModal(clinicId: string, clinicName: string) {
     const existing = shortlist[clinicId];

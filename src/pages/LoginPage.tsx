@@ -6,6 +6,9 @@ import { Button } from '../components/design-system/Button';
 import { Card } from '../components/design-system/Card';
 import { useAppStore } from '../store/useAppStore';
 import { useToast } from '../components/design-system/Toast';
+import { isRealMode } from '../lib/backendMode';
+import { getSupabase } from '../lib/supabaseClient';
+import { mapSupabaseUser } from '../lib/realBackend';
 
 type Mode = 'login' | 'signup';
 
@@ -86,6 +89,36 @@ export function LoginPage() {
     if (!validateAll()) return;
 
     setLoading(true);
+
+    // Real mode (move P4): supabase-js email+password. Same UI, new handlers.
+    if (isRealMode) {
+      const supabase = getSupabase();
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) {
+          setAuthError(error.message);
+        } else if (data.session && data.user) {
+          useAppStore.getState().setUser(mapSupabaseUser(data.user));
+          navigate('/onboarding');
+        } else {
+          // Email confirmation is on for this Supabase project.
+          addToast('Check your inbox to confirm your email, then sign in.', 'info');
+          switchMode('login');
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          setAuthError(error.message);
+        } else {
+          if (data.user) useAppStore.getState().setUser(mapSupabaseUser(data.user));
+          navigate('/dashboard');
+        }
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Demo mode: the original auth theatre, unchanged.
     // Simulate a brief async delay for realism
     await new Promise((r) => setTimeout(r, 400));
 

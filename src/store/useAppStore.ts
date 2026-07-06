@@ -4,6 +4,7 @@ import type {
   User,
   Profile,
   AgentSettings,
+  Clinic,
   ClinicStatus,
   ClinicStatusValue,
   ShortlistEntry,
@@ -12,6 +13,13 @@ import type {
   WizardState,
   WizardStepId,
 } from './types';
+import { isRealMode } from '../lib/backendMode';
+import {
+  addShortlistEntry,
+  removeShortlistEntry,
+  updateShortlistBooking,
+} from '../lib/repositories/shortlist';
+// Demo-mode data source and fake-call engine (never touched in real mode).
 import { MOCK_CLINICS } from '../mock/clinics';
 import { buildTranscriptContext, generateCallResult } from '../mock/transcripts';
 
@@ -45,7 +53,7 @@ const RUN_CALL_DURATION_MS = 600;
 
 // ── Default values ──────────────────────────────────────────
 
-const DEFAULT_AGENT_SETTINGS: Omit<AgentSettings, 'userId'> = {
+export const DEFAULT_AGENT_SETTINGS: Omit<AgentSettings, 'userId'> = {
   voicemailScript:
     'Hi, this is calling on behalf of a patient looking for a family doctor accepting new patients. Please call back at your earliest convenience. Thank you.',
   searchRadiusKm: 5,
@@ -81,6 +89,20 @@ type AppState = {
   // Auth / session
   user: User | null;
 
+  // Real mode: true once the initial Supabase session check has resolved.
+  // Routing NEVER redirects while this is false (the three-state
+  // undefined/null/present redirect bug, battle-plan P4 countermove).
+  // Demo mode: always true (mock auth is synchronous).
+  authLoaded: boolean;
+
+  // Real mode: the clinic catalog (scout results + clinics referenced by the
+  // user's calls and shortlist). Demo mode uses MOCK_CLINICS instead.
+  clinics: Clinic[];
+
+  // Real mode: last run-level failure surfaced by the backend (for example a
+  // "not_configured:<ENV_NAME>" code from a failed run row).
+  runError: string | null;
+
   // Profile
   profile: Profile | null;
 
@@ -101,10 +123,22 @@ type AppState = {
 
   // ── Actions ──
 
-  // Auth
+  // Auth (demo-mode auth theatre; real mode drives setUser/clearAllUserState
+  // from src/lib/realBackend.ts instead)
   signUp: (email: string) => void;
   signIn: (email: string) => boolean;
   signOut: () => void;
+  setUser: (user: User | null) => void;
+  setAuthLoaded: (loaded: boolean) => void;
+
+  // Real-mode client state lifecycle: sign-out clears the WHOLE user's client
+  // state, not just the user slice (P4 requirement).
+  clearAllUserState: () => void;
+
+  // Real-mode clinic catalog
+  setClinics: (clinics: Clinic[]) => void;
+  mergeClinics: (clinics: Clinic[]) => void;
+  setRunError: (error: string | null) => void;
 
   // Profile
   setProfile: (profile: Profile) => void;
@@ -145,6 +179,9 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       user: null,
+      authLoaded: !isRealMode,
+      clinics: [],
+      runError: null,
       profile: null,
       agentSettings: null,
       clinicStatuses: {},
@@ -173,9 +210,46 @@ export const useAppStore = create<AppState>()(
       },
 
       signOut: () => {
-        // Clear only the session user. Profile, settings, statuses, shortlist remain.
+        // Demo mode (D-6): clear only the session user. Profile, settings,
+        // statuses, shortlist remain. Real mode uses clearAllUserState instead.
         set({ user: null });
       },
+
+      setUser: (user: User | null) => set({ user }),
+
+      setAuthLoaded: (loaded: boolean) => set({ authLoaded: loaded }),
+
+      clearAllUserState: () => {
+        clearRunTimers();
+        set({
+          user: null,
+          clinics: [],
+          runError: null,
+          profile: null,
+          agentSettings: null,
+          clinicStatuses: {},
+          shortlist: {},
+          agentRun: null,
+          wizard: DEFAULT_WIZARD,
+        });
+      },
+
+      setClinics: (clinics: Clinic[]) => set({ clinics }),
+
+      mergeClinics: (incoming: Clinic[]) => {
+        const byId = new Map(get().clinics.map((c) => [c.id, c]));
+        for (const clinic of incoming) {
+          const prev = byId.get(clinic.id);
+          // Keep a known distance when a DB read (which has none) merges in.
+          byId.set(
+            clinic.id,
+            prev ? { ...prev, ...clinic, distanceKm: clinic.distanceKm ?? prev.distanceKm } : clinic,
+          );
+        }
+        set({ clinics: [...byId.values()] });
+      },
+
+      setRunError: (error: string | null) => set({ runError: error }),
 
       // ── Profile ──
 
@@ -277,12 +351,29 @@ export const useAppStore = create<AppState>()(
             },
           },
         });
+        // Real mode: write through to Postgres; revert the optimistic add on failure.
+        if (isRealMode && userId) {
+          void addShortlistEntry(userId, clinicId).catch((e) => {
+            console.error('shortlist add failed', e);
+            const next = { ...get().shortlist };
+            delete next[clinicId];
+            set({ shortlist: next });
+          });
+        }
       },
 
       removeFromShortlist: (clinicId: string) => {
+        const removed = get().shortlist[clinicId];
         const next = { ...get().shortlist };
         delete next[clinicId];
         set({ shortlist: next });
+        const userId = get().user?.id ?? '';
+        if (isRealMode && userId && removed) {
+          void removeShortlistEntry(userId, clinicId).catch((e) => {
+            console.error('shortlist remove failed', e);
+            set({ shortlist: { ...get().shortlist, [clinicId]: removed } });
+          });
+        }
       },
 
       updateShortlistEntry: (clinicId: string, partial: Partial<ShortlistEntry>) => {
@@ -294,6 +385,16 @@ export const useAppStore = create<AppState>()(
             [clinicId]: { ...existing, ...partial },
           },
         });
+        const userId = get().user?.id ?? '';
+        if (isRealMode && userId) {
+          void updateShortlistBooking(userId, clinicId, {
+            ...('bookingDate' in partial ? { bookingDate: partial.bookingDate ?? null } : {}),
+            ...('bookingNotes' in partial ? { bookingNotes: partial.bookingNotes ?? '' } : {}),
+          }).catch((e) => {
+            console.error('shortlist update failed', e);
+            set({ shortlist: { ...get().shortlist, [clinicId]: existing } });
+          });
+        }
       },
 
       // ── Agent run ──
@@ -307,6 +408,11 @@ export const useAppStore = create<AppState>()(
       },
 
       startAgentRun: () => {
+        // Demo-mode engine only. Real mode starts runs via POST /api/run/start
+        // and feeds this store from DB rows (src/lib/realBackend.ts); the two
+        // pipelines must never mix.
+        if (isRealMode) return false;
+
         const current = get().agentRun;
         // Concurrent runs are blocked; the caller surfaces the toast.
         if (current && (current.state === 'queued' || current.state === 'running')) {
@@ -404,7 +510,7 @@ export const useAppStore = create<AppState>()(
 
       resetAgentRun: () => {
         clearRunTimers();
-        set({ agentRun: null });
+        set({ agentRun: null, runError: null });
       },
 
       // ── Wizard ──
@@ -434,7 +540,23 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'fdf-store',
+      // Fork F2 (persist config is isolated here, so slices migrate in place):
+      // real mode persists ONLY the wizard (transient by design, still local);
+      // every migrated slice (user, profile, agentSettings, clinicStatuses,
+      // shortlist, agentRun) is owned by Supabase and must never resurrect
+      // from localStorage. Demo mode persists everything, exactly as before.
+      partialize: (state): Partial<AppState> =>
+        isRealMode ? { wizard: state.wizard } : state,
       merge: (persistedState, currentState) => {
+        if (isRealMode) {
+          // Only the wizard may rehydrate; stale demo-era blobs are ignored.
+          const persisted = persistedState as Partial<AppState> | undefined;
+          return {
+            ...currentState,
+            wizard: persisted?.wizard ?? currentState.wizard,
+          };
+        }
+
         const merged: AppState = {
           ...currentState,
           ...(persistedState as Partial<AppState>),

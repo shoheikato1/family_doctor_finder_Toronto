@@ -371,6 +371,7 @@ type SidebarNavProps = {
   user: { firstName: string; email: string };
   onNavigate: (route: string) => void;
   onSignOut: () => void;
+  backendBadge?: string;   // optional footer Tag naming the backend mode, e.g. "Demo mode" / "Live backend"
 };
 ```
 
@@ -385,6 +386,7 @@ Notes:
 * Nav items: icon + label, 12px vertical padding, 16px horizontal. Active item: `bg-background-base`, 3px `bg-primary` left border.
 * User card at the bottom: 48px circle avatar with mock initials, name, email truncated.
 * "Sign out" link below the user card. Ghost button.
+* Optional backend-mode badge below the sign out button: composes the Tag component (`size="sm"`), 24px left padding. Rendered only when `backendBadge` is provided; lets a demo audience see whether the build runs the mock demo or the live backend.
 
 ### UserCard
 
