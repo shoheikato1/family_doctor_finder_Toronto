@@ -22,3 +22,8 @@
 * Follow-up. Shohei reported *"ever since I made the change, the trash icon is finicky"* with a screenshot of a crowded tab row. Removed the `terminal.integrated.tabs.title` line as a reversible test (profiles and picker kept). Ongoing, waiting on whether the trash icon behaves now.
 * Follow-up. Shohei found the cause, *"when either CL or OC is running, you need to click twice, when stale, one click is all needed"*, and said *"if colour can distinguish, I dont need the CL or OC header"*. vault-agent now names the tab once after the vault and starts Claude with CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1 and Codex with tui.terminal_title=[]. Claude flag confirmed present in the binary. The Codex value is unverified. Ongoing until he confirms trash works on one click while busy.
 * Closed. Shohei confirmed *"yeah I think it's all good now"*. One click on trash now works on busy CL and OC tabs.
+
+## 2026-10-29 Voice second brain vision diagram (ongoing, belongs to dating_OS)
+* Shohei asked to turn his ChatGPT discussion into a diagram, *"infuse that discussion and turn that into the diagram so that we can refine the sort of like vision"*. The share link would not render, so the text came from his clipboard (copy starts at the per-message cost question, opening missing).
+* Published a private artifact, https://claude.ai/artifact/Ecs7n4AzK8MaLpoyaDens5 , combining that chat with this session. Verbatim source sits only in this session's scratchpad.
+* Next: move the source and the vision into a dating_OS session, kickoff "refine the voice second brain vision from the diagram". No project files changed.
