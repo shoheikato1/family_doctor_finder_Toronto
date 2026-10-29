@@ -27,3 +27,4 @@
 * Shohei asked to turn his ChatGPT discussion into a diagram, *"infuse that discussion and turn that into the diagram so that we can refine the sort of like vision"*. The share link would not render, so the text came from his clipboard (copy starts at the per-message cost question, opening missing).
 * Published a private artifact, https://claude.ai/artifact/Ecs7n4AzK8MaLpoyaDens5 , combining that chat with this session. Verbatim source sits only in this session's scratchpad.
 * Next: move the source and the vision into a dating_OS session, kickoff "refine the voice second brain vision from the diagram". No project files changed.
+* Update. Shohei pasted the opening of the ChatGPT chat. The two copies together make the full chat. Diagram v2 adds how the idea evolved, the early local-only stance, where her words go per hosting option, the retrieval rule, and the single-generator first version. Still ongoing pending the dating_OS move.
