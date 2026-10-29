@@ -11,3 +11,14 @@
   * Stage 2 (Scout): Google Cloud project + Places API (New) restricted key into `GOOGLE_PLACES_API_KEY`.
   * Stage 3 (Caller dry-run): ElevenLabs plan, Twilio upgrade + 2 Canadian numbers, create the two agents, wire webhooks, set voice/telephony env vars in Vercel.
 * Cross-reference: the job_search_OS mastery plan (2026-07-07) tags the Caller dry-run as the fastest production-form agent showcase, one checklist away from a demo.
+
+## 2026-10-29 VS Code terminal labels for Claude Code vs Codex (closed, tooling only)
+* Shohei asked *"I want to be able to know which ones are from the cloud code and which ones from the codec... CL for cloud code and OC for the codecs"*, pointing at the VS Code terminal tab list.
+* Codex CLI 0.153.4 was already installed via Homebrew. Added two VS Code terminal profiles in the global user settings (`~/Library/Application Support/Code/User/settings.json`), `CL` (launches `claude`, yellow sparkle) and `OC` (launches `codex`, green robot), and set tab titles to `${process} ${sequence}` so each tab leads with `claude` or `codex` followed by its live topic.
+* No project files changed. Not yet observed in VS Code by Shohei.
+* Follow-up same day. Shohei asked *"this should be a default setting... for all the vaults... When I click on the arrow next to + how can I choose vault as well"*. CL and OC now run `~/.local/bin/vault-agent`, which lists every vault (`~/Obsidian/*` plus `~/dev/*` repos with `.obsidian`), takes a number, then starts `claude` or `codex` there. Enter keeps the current folder. Tested from the shell (pick, Enter, bad number), not yet in VS Code.
+* Follow-up. Shohei asked *"can I rearragent the vault order?"*. Added an order file at `~/.config/vault-agent/order` (one vault name per line, listed vaults first, the rest after in the default order). Seeded with video_OS and job_search_OS_v2 as a test, pending his real order.
+* Order set per Shohei: job_search_OS_v2, social_content_strategy_OS, personal, video_OS, knowledge-hubs, dating_OS, then the rest. Closed.
+* Follow-up. Shohei reported *"ever since I made the change, the trash icon is finicky"* with a screenshot of a crowded tab row. Removed the `terminal.integrated.tabs.title` line as a reversible test (profiles and picker kept). Ongoing, waiting on whether the trash icon behaves now.
+* Follow-up. Shohei found the cause, *"when either CL or OC is running, you need to click twice, when stale, one click is all needed"*, and said *"if colour can distinguish, I dont need the CL or OC header"*. vault-agent now names the tab once after the vault and starts Claude with CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1 and Codex with tui.terminal_title=[]. Claude flag confirmed present in the binary. The Codex value is unverified. Ongoing until he confirms trash works on one click while busy.
+* Closed. Shohei confirmed *"yeah I think it's all good now"*. One click on trash now works on busy CL and OC tabs.
